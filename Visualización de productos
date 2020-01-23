@@ -1,0 +1,390 @@
+WITH 
+  config AS (
+    SELECT  -91 as from_interval,
+            -1 as to_interval )
+
+, shop_details AS (
+                  SELECT 
+                      fullVisitorId
+                   ,  visitId
+                   ,  date
+                   ,  platform
+                   ,  cd20 as shopId
+                   ,  max(hitnumber) as max_hitnumber
+                  FROM `General_Tables.Pedidosya_ga_hits`
+                  WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+                                      AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+                  AND platform='Android'
+                  AND eventAction='shop_details.loaded'
+                  AND UPPER(cd108) NOT IN ('RESTAURANT')
+                  GROUP BY 1,2,3,4,5
+                  )
+                  
+, shop_details_all_hits AS (
+                  SELECT 
+                      fullVisitorId
+                   ,  visitId
+                   ,  date
+                   ,  platform
+                   ,  cd20 as shopId
+                   ,  hitnumber
+                   ,  cd159 as origin
+                   ,  cd108 as businessType
+                  FROM `General_Tables.Pedidosya_ga_hits`
+                  WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+                                      AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+                  AND platform='Android'
+                  AND eventAction='shop_details.loaded'
+                  GROUP BY 1,2,3,4,5,6,7,8
+                  )
+                  
+, section_details AS (
+                  SELECT
+                      ga.fullVisitorId
+                   ,  ga.visitId
+                   ,  ga.date
+                   ,  ga.platform
+                   ,  ga.shopId
+                   ,  ga.origin
+                   ,  min(ga.hitnumber) as min_hitnumber
+                   FROM (
+                        SELECT 
+                            fullVisitorId
+                         ,  visitId
+                         ,  date
+                         ,  platform
+                         ,  cd20  as shopId
+                         ,  cd159 as origin
+                         ,  hitnumber
+                        FROM `General_Tables.Pedidosya_ga_hits`
+                        WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+                                            AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+                        AND platform='Android'
+                        AND eventAction='section_details.loaded'
+                        GROUP BY 1,2,3,4,5,6,7
+                         ) as ga
+                  LEFT JOIN shop_details sd ON  ga.fullVisitorId =  sd.fullVisitorId
+                                            AND ga.visitId       =  sd.visitId
+                                            AND ga.date          =  sd.date
+                                            AND ga.platform      =  sd.platform
+                                            AND ga.shopId        =  sd.shopId
+                                            AND ga.hitNumber     >  sd.max_hitnumber
+
+                  GROUP BY 1,2,3,4,5,6
+                  )                                    
+
+, product_search_succeded AS (
+                  SELECT
+                      ga.fullVisitorId
+                   ,  ga.visitId
+                   ,  ga.date
+                   ,  ga.platform
+                   ,  ga.shopId
+                   ,  ga.sku
+                   ,  min(ga.hitnumber) as min_hitnumber
+                   FROM (
+                        SELECT 
+                            fullVisitorId
+                         ,  visitId
+                         ,  date
+                         ,  platform
+                         ,  cd20 as shopId
+                         ,  cd71 as sku
+                         ,  hitnumber
+                        FROM `General_Tables.Pedidosya_ga_hits`
+                        WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+                                            AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+                        AND platform='Android'
+                        AND eventAction='product_search.succeeded'
+                        GROUP BY 1,2,3,4,5,6,7
+                         ) as ga
+                  LEFT JOIN shop_details sd ON  ga.fullVisitorId =  sd.fullVisitorId
+                                            AND ga.visitId       =  sd.visitId
+                                            AND ga.date          =  sd.date
+                                            AND ga.platform      =  sd.platform
+                                            AND ga.shopId        =  sd.shopId
+                                            AND ga.hitNumber     >  sd.max_hitnumber                                       
+
+                  GROUP BY 1,2,3,4,5,6
+                  ) 
+
+
+, product_clicked AS (
+                  SELECT
+                      ga.fullVisitorId
+                   ,  ga.visitId
+                   ,  ga.date
+                   ,  ga.platform
+                   ,  ga.shopId
+                   ,  ga.sku
+                   ,  min(ga.hitnumber) as min_hitnumber
+                   FROM (
+                        SELECT 
+                            fullVisitorId
+                         ,  visitId
+                         ,  date
+                         ,  platform
+                         ,  cd20 as shopId
+                         ,  cd71 as sku
+                         ,  hitnumber
+                        FROM `General_Tables.Pedidosya_ga_hits`
+                        WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+                                            AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+                        AND platform='Android'
+                        AND eventAction='product.clicked'
+                        GROUP BY 1,2,3,4,5,6,7
+                         ) as ga
+                  LEFT JOIN shop_details sd ON  ga.fullVisitorId =  sd.fullVisitorId
+                                            AND ga.visitId       =  sd.visitId
+                                            AND ga.date          =  sd.date
+                                            AND ga.platform      =  sd.platform
+                                            AND ga.shopId        =  sd.shopId
+                                            AND ga.hitNumber     >  sd.max_hitnumber
+
+                  LEFT JOIN section_details se_d ON  ga.fullVisitorId =  se_d.fullVisitorId
+                                                 AND ga.visitId       =  se_d.visitId
+                                                 AND ga.date          =  se_d.date
+                                                 AND ga.platform      =  se_d.platform
+                                                 AND ga.shopId        =  se_d.shopId
+                                                 AND ga.hitNumber     >  se_d.min_hitnumber
+                                                     
+                  LEFT JOIN product_search_succeded ps ON  ga.fullVisitorId =  ps.fullVisitorId
+                                                       AND ga.visitId       =  ps.visitId
+                                                       AND ga.date          =  ps.date
+                                                       AND ga.platform      =  ps.platform
+                                                       AND ga.shopId        =  ps.shopId
+                                                       AND ga.hitNumber     >  ps.min_hitnumber                                                     
+                  GROUP BY 1,2,3,4,5,6
+                  )
+                  
+, add_cart_clicked AS (
+                  SELECT
+                      ga.fullVisitorId
+                   ,  ga.visitId
+                   ,  ga.date
+                   ,  ga.platform
+                   ,  ga.shopId
+                   ,  ga.sku     
+                   ,  min(ga.hitnumber) as min_hitnumber                   
+                 FROM (
+                        SELECT 
+                            fullVisitorId
+                         ,  visitId
+                         ,  date
+                         ,  platform
+                         ,  cd20 as shopId
+                         ,  cd71 as sku
+                         ,  hitnumber                         
+                        FROM `General_Tables.Pedidosya_ga_hits`
+                        WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+                                            AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+                        AND platform='Android'
+                        AND eventAction='add_cart.clicked'
+                        GROUP BY 1,2,3,4,5,6,7
+                  ) as ga
+                  LEFT JOIN shop_details sd ON  ga.fullVisitorId =  sd.fullVisitorId
+                                            AND ga.visitId       =  sd.visitId
+                                            AND ga.date          =  sd.date
+                                            AND ga.platform      =  sd.platform
+                                            AND ga.shopId        =  sd.shopId
+                                            AND ga.hitNumber     >  sd.max_hitnumber         
+                                            
+                  LEFT JOIN section_details se_d ON  ga.fullVisitorId =  se_d.fullVisitorId
+                                                 AND ga.visitId       =  se_d.visitId
+                                                 AND ga.date          =  se_d.date
+                                                 AND ga.platform      =  se_d.platform
+                                                 AND ga.shopId        =  se_d.shopId
+                                                 AND ga.hitNumber     >  se_d.min_hitnumber
+                                                     
+                  LEFT JOIN product_search_succeded ps ON  ga.fullVisitorId =  ps.fullVisitorId
+                                                       AND ga.visitId       =  ps.visitId
+                                                       AND ga.date          =  ps.date
+                                                       AND ga.platform      =  ps.platform
+                                                       AND ga.shopId        =  ps.shopId
+                                                       AND ga.hitNumber     >  ps.min_hitnumber                  
+                  
+                  LEFT JOIN product_clicked pc ON  ga.fullVisitorId =  pc.fullVisitorId
+                                               AND ga.visitId       =  pc.visitId
+                                               AND ga.date          =  pc.date
+                                               AND ga.platform      =  pc.platform
+                                               AND ga.shopId        =  pc.shopId
+                                               AND ga.hitNumber     >  pc.min_hitnumber
+                                               AND ga.sku           =  pc.sku
+                  GROUP BY 1,2,3,4,5,6 )
+                  
+-- , transaction AS (
+--                   SELECT
+--                       ga.fullVisitorId
+--                    ,  ga.visitId
+--                    ,  ga.date
+--                    ,  ga.platform
+--                    ,  ga.shopId   
+--                    ,  min(ga.hitnumber) as min_hitnumber                   
+--                  FROM (
+--                         SELECT 
+--                             fullVisitorId
+--                          ,  visitId
+--                          ,  date
+--                          ,  platform
+--                          ,  cd20 as shopId
+--                          ,  hitnumber                         
+--                         FROM `General_Tables.Pedidosya_ga_hits`
+--                         WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+--                                             AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+--                         AND platform='Android'
+--                         AND eventAction='transaction'
+--                         GROUP BY 1,2,3,4,5,6
+--                   ) as ga
+--                   LEFT JOIN shop_details sd ON  ga.fullVisitorId =  sd.fullVisitorId
+--                                             AND ga.visitId       =  sd.visitId
+--                                             AND ga.date          =  sd.date
+--                                             AND ga.platform      =  sd.platform
+--                                             AND ga.shopId        =  sd.shopId
+--                                             AND ga.hitNumber     >  sd.max_hitnumber         
+                                            
+--                   LEFT JOIN section_details se_d ON  ga.fullVisitorId =  se_d.fullVisitorId
+--                                                  AND ga.visitId       =  se_d.visitId
+--                                                  AND ga.date          =  se_d.date
+--                                                  AND ga.platform      =  se_d.platform
+--                                                  AND ga.shopId        =  se_d.shopId
+--                                                  AND ga.hitNumber     >  se_d.min_hitnumber
+                                                     
+--                   LEFT JOIN product_search_succeded ps ON  ga.fullVisitorId =  ps.fullVisitorId
+--                                                        AND ga.visitId       =  ps.visitId
+--                                                        AND ga.date          =  ps.date
+--                                                        AND ga.platform      =  ps.platform
+--                                                        AND ga.shopId        =  ps.shopId
+--                                                        AND ga.hitNumber     >  ps.min_hitnumber                                              
+                                            
+--                   LEFT JOIN product_clicked pc ON  ga.fullVisitorId =  pc.fullVisitorId
+--                                                AND ga.visitId       =  pc.visitId
+--                                                AND ga.date          =  pc.date
+--                                                AND ga.platform      =  pc.platform
+--                                                AND ga.shopId        =  pc.shopId
+--                                                AND ga.hitNumber     >  pc.min_hitnumber
+                  
+--                   LEFT JOIN add_cart_clicked ac ON  ga.fullVisitorId =  ac.fullVisitorId
+--                                                 AND ga.visitId       =  ac.visitId
+--                                                 AND ga.date          =  ac.date
+--                                                 AND ga.platform      =  ac.platform
+--                                                 AND ga.shopId        =  ac.shopId
+--                                                 AND ga.hitNumber     >  ac.min_hitnumber                   
+--                   GROUP BY 1,2,3,4,5)
+
+-- , last_shop_details_transaction AS (
+--                   SELECT
+--                       ga.fullVisitorId
+--                    ,  ga.visitId
+--                    ,  ga.date
+--                    ,  ga.platform
+--                    ,  ga.shopId   
+--                    ,  max(ga.hitnumber) as max_hitnumber_before_tr                   
+--                  FROM (
+--                         SELECT 
+--                             fullVisitorId
+--                          ,  visitId
+--                          ,  date
+--                          ,  platform
+--                          ,  cd20 as shopId
+--                          ,  hitnumber                         
+--                         FROM `General_Tables.Pedidosya_ga_hits`
+--                         WHERE date(date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+--                                             AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+--                         AND platform='Android'
+--                         AND eventAction='shop_details.loaded'
+--                         GROUP BY 1,2,3,4,5,6
+--                   ) as ga
+--                   RIGHT JOIN transaction tr ON  ga.fullVisitorId =  tr.fullVisitorId
+--                                             AND ga.visitId       =  tr.visitId
+--                                             AND ga.date          =  tr.date
+--                                             AND ga.platform      =  tr.platform
+--                                             AND ga.shopId        =  tr.shopId
+--                                             AND ga.hitNumber     <  tr.min_hitnumber 
+--                   GROUP BY 1,2,3,4,5
+--                                         )
+, funnel_length AS (
+SELECT 
+      sd.fullVisitorId
+   ,  sd.visitId
+   ,  sd.date
+   ,  sd.platform
+   , CONCAT(sd.fullvisitorid, cast(sd.visitid as STRING), cast(sd.date as STRING), sd.platform) as sessionId
+   ,  sd.shopId
+   ,  se_d.origin
+   ,  sdah.businessType
+   , max(case when sd.fullvisitorid      is not null then 1 else 0 end) funnel_shop_details
+   , max(case when se_d.fullvisitorid    is not null then 1 else 0 end) funnel_section_detail
+   , max(case when ps.fullvisitorid      is not null then 1 else 0 end) funnel_product_search_succeded
+   , max(case when pc.fullvisitorid      is not null then 1 else 0 end) funnel_product_clicked
+   , max(case when ac.fullvisitorid      is not null then 1 else 0 end) funnel_add_cart_clicked   
+   
+   , CONCAT( CAST(max(case when sd.fullvisitorid      is not null then 1 else 0 end) AS STRING) 
+           , CAST(max(case when se_d.fullvisitorid    is not null then 1 else 0 end) AS STRING)
+           , CAST(max(case when ps.fullvisitorid      is not null then 1 else 0 end) AS STRING)
+           , CAST(max(case when pc.fullvisitorid      is not null then 1 else 0 end) AS STRING)
+           , CAST(max(case when ac.fullvisitorid      is not null then 1 else 0 end) AS STRING)) as funnel
+
+FROM shop_details sd
+
+LEFT JOIN section_details se_d ON  sd.fullVisitorId =  se_d.fullVisitorId
+                               AND sd.visitId       =  se_d.visitId
+                               AND sd.date          =  se_d.date
+                               AND sd.platform      =  se_d.platform
+                               AND sd.shopId        =  se_d.shopId
+
+LEFT JOIN product_search_succeded ps ON  sd.fullVisitorId =  ps.fullVisitorId
+                                     AND sd.visitId       =  ps.visitId
+                                     AND sd.date          =  ps.date
+                                     AND sd.platform      =  ps.platform
+                                     AND sd.shopId        =  ps.shopId
+
+LEFT JOIN product_clicked pc ON  sd.fullVisitorId =  pc.fullVisitorId
+                             AND sd.visitId       =  pc.visitId
+                             AND sd.date          =  pc.date
+                             AND sd.platform      =  pc.platform
+                             AND sd.shopId        =  pc.shopId
+
+LEFT JOIN add_cart_clicked ac ON  sd.fullVisitorId =  ac.fullVisitorId
+                              AND sd.visitId       =  ac.visitId
+                              AND sd.date          =  ac.date
+                              AND sd.platform      =  ac.platform
+                              AND sd.shopId        =  ac.shopId
+                             
+LEFT JOIN shop_details_all_hits sdah  ON  sd.fullVisitorId =  sdah.fullVisitorId
+                                      AND sd.visitId       =  sdah.visitId
+                                      AND sd.date          =  sdah.date
+                                      AND sd.platform      =  sdah.platform
+                                      AND sd.shopId        =  sdah.shopId
+
+WHERE date(sd.date) BETWEEN DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT from_interval FROM config) DAY)
+                        AND DATE_ADD(CURRENT_DATE(), INTERVAL(SELECT to_interval FROM config) DAY)
+GROUP BY 1,2,3,4,5,6,7,8
+ORDER BY 1,2,3,4,7
+)
+
+SELECT
+--         date
+--       , fullVisitorId
+--       , visitId
+--       , platform
+--       , sessionId
+--       , shopId
+--       , origin
+--       , businessType
+--       , funnel_shop_details
+--       , funnel_section_detail
+--       , funnel_product_search_succeded
+--       , funnel_product_clicked
+--       , funnel_add_cart_clicked
+--       , funnel
+
+            COUNT(*) as total_shop_details
+         ,  SUM(CASE WHEN regexp_contains(funnel , r"\d1\d\d\d") THEN 1 ELSE 0 END) as qty_section_detail
+         , (SUM(CASE WHEN regexp_contains(funnel , r"\d1\d\d\d") THEN 1 ELSE 0 END) / COUNT(*)) as shop_to_section_details
+         ,  SUM(CASE WHEN regexp_contains(funnel , r"\d1\d1\d") THEN 1 ELSE 0 END)  as qty_product_clicked
+         , (SUM(CASE WHEN regexp_contains(funnel , r"\d1\d1\d") THEN 1 ELSE 0 END) / SUM(CASE WHEN regexp_contains(funnel , r"\d1\d\d\d") THEN 1 ELSE 0 END)) as section_to_product
+         ,  SUM(CASE WHEN regexp_contains(funnel , r"\d1\d11") THEN 1 ELSE 0 END)   as qty_add_cart_clicked
+         , (SUM(CASE WHEN regexp_contains(funnel , r"\d1\d11") THEN 1 ELSE 0 END) / SUM(CASE WHEN regexp_contains(funnel , r"\d1\d1\d") THEN 1 ELSE 0 END)) as product_to_add_cart
+FROM funnel_length
+-- GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14
+-- ORDER BY 2,3,6
